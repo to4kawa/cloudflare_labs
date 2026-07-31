@@ -114,19 +114,37 @@ function parseSunoUrl(input: string): string | null {
  * Fallback: Fetch Suno page and extract metadata
  */
 async function resolveSongMetadata(songId: string, sourceUrl: string): Promise<SongMetadata> {
+  // Short URL (/s/...) redirects to full /song/{uuid}. Follow redirect to get real UUID.
+  let realId = songId;
+  let realSourceUrl = sourceUrl;
+
+  if (sourceUrl.includes('/s/')) {
+    try {
+      const res = await fetch(sourceUrl, { redirect: 'follow' });
+      const finalUrl = res.url;
+      const match = finalUrl.match(/\/song\/([a-f0-9\-]+)/i);
+      if (match) {
+        realId = match[1];
+        realSourceUrl = finalUrl;
+      }
+    } catch (e) {
+      // Redirect failed — fall through with original id
+    }
+  }
+
   // Try direct CDN URLs first
-  const audioUrl = `https://cdn1.suno.ai/${songId}.mp3`;
+  const audioUrl = `https://cdn1.suno.ai/${realId}.mp3`;
   const coverCandidates = [
-    `https://cdn2.suno.ai/image_${songId}.jpeg`,
-    `https://cdn2.suno.ai/image_large_${songId}.jpeg`,
-    `https://cdn1.suno.ai/image_${songId}.png`,
+    `https://cdn2.suno.ai/image_${realId}.jpeg`,
+    `https://cdn2.suno.ai/image_large_${realId}.jpeg`,
+    `https://cdn1.suno.ai/image_${realId}.png`,
   ];
 
   // Verify audio URL exists (HEAD request)
   const audioCheck = await fetch(audioUrl, { method: 'HEAD' });
   if (!audioCheck.ok) {
     // Fallback: try to fetch metadata from page
-    return await fetchMetadataFromPage(songId, sourceUrl);
+    return await fetchMetadataFromPage(realId, realSourceUrl);
   }
 
   // Try to find working cover URL
@@ -140,12 +158,12 @@ async function resolveSongMetadata(songId: string, sourceUrl: string): Promise<S
   }
 
   return {
-    id: songId,
+    id: realId,
     title: null, // Title requires page fetch
     audio_url: audioUrl,
     cover_url: coverUrl,
     duration: null,
-    source_url: sourceUrl,
+    source_url: realSourceUrl,
     resolved_at: new Date().toISOString(),
   };
 }
