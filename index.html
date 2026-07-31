@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>D3.js Sample - Cloudflare Labs</title>
+  <style>
+    body {
+      margin: 0;
+      background: #0f0f13;
+      color: #e0e0e0;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+    h1 {
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    p {
+      color: #888;
+      margin-top: 0;
+      margin-bottom: 40px;
+    }
+    .bar:hover {
+      opacity: 0.8;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>D3.js on Cloudflare Pages</h1>
+  <p>シンプルな棒グラフ（ホバーで色が変わる）</p>
+
+  <div id="chart"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script>
+    // サンプルデータ
+    const data = [
+      { name: "Workers", value: 92 },
+      { name: "Pages", value: 88 },
+      { name: "R2", value: 75 },
+      { name: "D1", value: 68 },
+      { name: "KV", value: 81 },
+      { name: "Queues", value: 59 }
+    ];
+
+    const width = 600;
+    const height = 360;
+    const margin = { top: 20, right: 30, bottom: 40, left: 50 };
+
+    const svg = d3.select("#chart")
+      .append("svg")
+      .attr("width", width)
+      .attr("height", height)
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .style("max-width", "100%")
+      .style("height", "auto");
+
+    const x = d3.scaleBand()
+      .domain(data.map(d => d.name))
+      .range([margin.left, width - margin.right])
+      .padding(0.3);
+
+    const y = d3.scaleLinear()
+      .domain([0, d3.max(data, d => d.value)])
+      .nice()
+      .range([height - margin.bottom, margin.top]);
+
+    // 棒
+    svg.selectAll(".bar")
+      .data(data)
+      .join("rect")
+      .attr("class", "bar")
+      .attr("x", d => x(d.name))
+      .attr("y", d => y(d.value))
+      .attr("width", x.bandwidth())
+      .attr("height", d => y(0) - y(d.value))
+      .attr("fill", "#f97316")
+      .attr("rx", 4)
+      .on("mouseover", function() {
+        d3.select(this).attr("fill", "#fb923c");
+      })
+      .on("mouseout", function() {
+        d3.select(this).attr("fill", "#f97316");
+      });
+
+    // X軸
+    svg.append("g")
+      .attr("transform", `translate(0,${height - margin.bottom})`)
+      .call(d3.axisBottom(x))
+      .selectAll("text")
+      .attr("fill", "#aaa");
+
+    // Y軸
+    svg.append("g")
+      .attr("transform", `translate(${margin.left},0)`)
+      .call(d3.axisLeft(y))
+      .selectAll("text")
+      .attr("fill", "#aaa");
+
+    // 軸の線を薄く
+    svg.selectAll(".domain, .tick line")
+      .attr("stroke", "#333");
+  </script>
+</body>
+</html>
