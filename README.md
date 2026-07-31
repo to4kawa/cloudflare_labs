@@ -54,10 +54,7 @@ Deployment is handled automatically by Cloudflare:
 2. Cloudflare auto-deploys from the repository
 3. Test on the deployed Worker URL
 
-### Design Document
-See [docs/design-suno-visualizer.yaml](docs/design-suno-visualizer.yaml) for the complete specification.
-
-### Constraints
+## Constraints
 - ❌ NO package.json
 - ❌ NO npm install / npm run dev
 - ❌ NO wrangler as project dependency
@@ -65,4 +62,13 @@ See [docs/design-suno-visualizer.yaml](docs/design-suno-visualizer.yaml) for the
 - ✅ Single Worker file (`index.ts`)
 - ✅ Static assets in `public/`
 - ✅ Git push → auto-deploy only
+
+## Spec
+
+Project constraints and architecture are defined in:
+
+- [docs/spec.yaml](docs/spec.yaml)
+
+All feature work should follow this file.
+Design docs for individual features live under `docs/design-*.yaml`.
 

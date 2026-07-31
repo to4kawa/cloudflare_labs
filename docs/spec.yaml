@@ -1,0 +1,116 @@
+# docs/spec.yaml
+# Canonical project specification & constraints for cloudflare_labs
+# All feature work must follow this file.
+# Version: 1.0.0
+# Last Updated: 2026-08-01
+
+meta:
+  project: cloudflare_labs
+  name: Suno Visualizer on Cloudflare Workers
+  description: |
+    Resolve Suno song metadata via Worker API and visualize audio
+    in the browser. Vercel-like Git-push deploy. Zero local Node toolchain.
+  primary_url: https://cloudflare-labs.to-4kawa.workers.dev/visualizer
+
+architecture:
+  style: static-assets + single-worker
+  components:
+    - path: index.ts
+      role: Worker entry. Routes /api/suno and serves public/ via ASSETS.
+    - path: public/visualizer.html
+      role: Client UI. p5.js + Web Audio visualization.
+    - path: public/index.html
+      role: Landing / other static demos.
+    - path: wrangler.jsonc
+      role: Cloudflare config (assets.directory = public).
+  non_components:
+    - package.json
+    - node_modules
+    - npm scripts
+    - local wrangler dev as a required workflow
+
+constraints:
+  hard:
+    - NO package.json
+    - NO node_modules
+    - NO npm / yarn / pnpm install for this project
+    - NO local development environment required for delivery
+    - Single Worker source file (index.ts) for server logic
+    - Static client only (CDN libs allowed, e.g. p5.js)
+    - Deploy path is: git push → Cloudflare Workers Builds
+    - Verification must be on the deployed URL, not only local
+  soft:
+    - Prefer design YAML in docs/ before non-trivial features
+    - Keep API response schema backward-compatible when possible
+    - Prefer short, focused Agentty sessions over huge pastes
+
+api:
+  endpoint: GET /api/suno?url={suno_url}
+  accepts:
+    - https://suno.com/song/{uuid}
+    - https://suno.com/s/{shortId}
+  behavior:
+    - Follow short-URL redirects to resolve real UUID
+    - Build audio CDN URL from real UUID
+    - Enrich title/cover via light page meta fetch when possible
+    - Missing title is not a hard error if audio_url is valid
+  response_fields:
+    - id
+    - title          # string | null
+    - audio_url
+    - cover_url      # string | null
+    - duration       # number | null
+    - source_url
+    - resolved_at
+
+client:
+  file: public/visualizer.html
+  features:
+    - Load Suno URL → call /api/suno → play + visualize
+    - Spectrum display uses lower portion of FFT bins (high-end cut)
+    - Approximately 8 switchable color palettes
+  rules:
+    - No build step
+    - No local bundler
+    - Keep dependencies to CDN scripts only
+
+feature_process:
+  required_steps:
+    - 1. Write or update a design YAML under docs/ (for non-trivial work)
+    - 2. Implement only within architecture + constraints above
+    - 3. Commit without introducing Node scaffolding
+    - 4. Push and verify on deployed workers.dev URL
+  design_yaml_format:
+    required_keys:
+      - meta
+      - constraints   # must reaffirm parent constraints or inherit this file
+      - scope
+      - verification
+    recommended_keys:
+      - parent_design
+      - implementation_notes
+      - success_criteria
+      - out_of_scope
+
+verification:
+  gate: deployed-static-check
+  minimum:
+    - /visualizer loads
+    - /api/suno works for full and short Suno URLs
+    - Public tracks return playable audio_url
+    - Title present when page meta is available
+    - Spectrum does not leave a large empty high-frequency region
+    - Palette switching works
+  forbidden_as_sole_proof:
+    - local-only screenshots without deployed URL check
+
+out_of_scope_default:
+  - Electron / Tauri desktop ports in this repo
+  - Official Suno API dependency as primary path
+  - Heavy scraping or brittle internal APIs as primary path
+  - Adding a Node app shell "for convenience"
+
+references:
+  - docs/design-suno-visualizer.yaml
+  - docs/design-suno-title-extraction.yaml
+  - docs/design-suno-visualizer-ui-v2.yaml
