@@ -208,6 +208,53 @@
       background: #000;
     }
 
+    .palette-selector {
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .palette-selector label {
+      color: #888;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .palette-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .palette-btn {
+      padding: 10px 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .palette-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .palette-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-color: #667eea;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
     .loading {
       text-align: center;
       padding: 40px;
@@ -280,6 +327,19 @@
     </div>
 
     <div class="visualizer-section" id="visualizer-section">
+      <div class="palette-selector">
+        <label>Color Palette</label>
+        <div class="palette-buttons">
+          <button class="palette-btn active" data-palette="purple-pink">Purple Pink</button>
+          <button class="palette-btn" data-palette="cyan-blue">Cyan Blue</button>
+          <button class="palette-btn" data-palette="orange-fire">Orange Fire</button>
+          <button class="palette-btn" data-palette="green-matrix">Green Matrix</button>
+          <button class="palette-btn" data-palette="red-heat">Red Heat</button>
+          <button class="palette-btn" data-palette="rainbow">Rainbow</button>
+          <button class="palette-btn" data-palette="mono">Mono</button>
+          <button class="palette-btn" data-palette="neon">Neon</button>
+        </div>
+      </div>
       <div id="p5-container"></div>
     </div>
   </div>
@@ -296,6 +356,59 @@
     let dataArray;
     let bufferLength;
     let p5Instance;
+    let currentPalette = 'purple-pink';
+
+    // Color Palettes
+    const palettes = {
+      'purple-pink': {
+        hueStart: 260,
+        hueEnd: 320,
+        saturation: 80,
+        type: 'gradient'
+      },
+      'cyan-blue': {
+        hueStart: 180,
+        hueEnd: 220,
+        saturation: 85,
+        type: 'gradient'
+      },
+      'orange-fire': {
+        hueStart: 10,
+        hueEnd: 40,
+        saturation: 90,
+        type: 'gradient'
+      },
+      'green-matrix': {
+        hueStart: 120,
+        hueEnd: 140,
+        saturation: 85,
+        type: 'gradient'
+      },
+      'red-heat': {
+        hueStart: 0,
+        hueEnd: 20,
+        saturation: 95,
+        type: 'gradient'
+      },
+      'rainbow': {
+        hueStart: 0,
+        hueEnd: 360,
+        saturation: 90,
+        type: 'gradient'
+      },
+      'mono': {
+        hueStart: 0,
+        hueEnd: 0,
+        saturation: 0,
+        type: 'gradient'
+      },
+      'neon': {
+        hueStart: 280,
+        hueEnd: 340,
+        saturation: 100,
+        type: 'gradient'
+      }
+    };
 
     // DOM Elements
     const urlInput = document.getElementById('url-input');
@@ -313,6 +426,20 @@
     loadBtn.addEventListener('click', loadSong);
     urlInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') loadSong();
+    });
+
+    // Palette selector
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('palette-btn')) {
+        // Remove active class from all buttons
+        document.querySelectorAll('.palette-btn').forEach(btn => {
+          btn.classList.remove('active');
+        });
+        // Add active class to clicked button
+        e.target.classList.add('active');
+        // Update current palette
+        currentPalette = e.target.dataset.palette;
+      }
     });
 
     // Load song from Suno URL
@@ -410,29 +537,35 @@
           // Get frequency data
           analyser.getByteFrequencyData(dataArray);
 
-          // Draw frequency bars
-          const barWidth = p.width / bufferLength;
+          // Use only lower 75% of frequency bins to avoid empty high-end
+          const usefulBins = Math.floor(bufferLength * 0.75);
+          const barWidth = p.width / usefulBins;
           let x = 0;
 
-          for (let i = 0; i < bufferLength; i++) {
+          // Get current palette settings
+          const palette = palettes[currentPalette];
+
+          // Draw frequency bars
+          for (let i = 0; i < usefulBins; i++) {
             const barHeight = (dataArray[i] / 255) * p.height * 0.8;
-            const hue = p.map(i, 0, bufferLength, 200, 300);
+            const hue = p.map(i, 0, usefulBins, palette.hueStart, palette.hueEnd);
             const brightness = p.map(dataArray[i], 0, 255, 30, 100);
 
-            p.fill(hue, 80, brightness);
+            p.fill(hue, palette.saturation, brightness);
             p.noStroke();
             p.rect(x, p.height - barHeight, barWidth, barHeight);
 
             x += barWidth;
           }
 
-          // Draw waveform overlay
-          p.stroke(280, 80, 90, 0.5);
+          // Draw waveform overlay with palette-aware color
+          const overlayHue = (palette.hueStart + palette.hueEnd) / 2;
+          p.stroke(overlayHue, palette.saturation, 90, 0.5);
           p.strokeWeight(2);
           p.noFill();
           p.beginShape();
-          for (let i = 0; i < bufferLength; i++) {
-            const x = p.map(i, 0, bufferLength, 0, p.width);
+          for (let i = 0; i < usefulBins; i++) {
+            const x = p.map(i, 0, usefulBins, 0, p.width);
             const y = p.map(dataArray[i], 0, 255, p.height, p.height * 0.2);
             p.vertex(x, y);
           }
