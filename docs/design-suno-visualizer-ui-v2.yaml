@@ -1,0 +1,123 @@
+# design-suno-visualizer-ui-v2.yaml
+# AI-readable design document for visualizer UI improvements
+# Version: 0.1.0
+# Status: Draft
+# Last Updated: 2026-08-01
+# Parent: design-suno-visualizer.yaml
+
+meta:
+  project: cloudflare_labs
+  feature: suno-visualizer-ui-v2
+  parent_design: docs/design-suno-visualizer.yaml
+  goal: |
+    Improve the client-side visualizer appearance:
+    1. Cut unused high-frequency range of the spectrum so the display feels full
+    2. Add ~8 switchable color palettes
+    Keep everything pure static (no build tools, no Node).
+
+constraints:
+  - Follow all constraints from the parent design document
+  - Changes are limited to public/visualizer.html (and minimal CSS/JS inside it)
+  - NO package.json / npm / local development environment
+  - NO new external libraries beyond existing p5.js CDN
+  - Keep current audio loading and Worker API integration unchanged
+
+problems:
+  spectrum_empty_high_end:
+    description: |
+      The right side of the spectrum (roughly 1/6 of the width) often appears empty.
+      This is common with MP3 sources because energy above ~16kHz is weak or absent.
+    desired_fix: |
+      Display only the musically useful lower portion of the FFT data
+      so the bars fill the canvas more naturally.
+
+  single_color_scheme:
+    description: Only one color gradient is available.
+    desired_fix: Provide approximately 8 selectable color palettes.
+
+scope:
+  in_scope:
+    - Limit the number of FFT bins used for drawing (high-frequency cut)
+    - Add a small UI control to switch color palettes
+    - Define 8 palettes with distinct moods
+  out_of_scope:
+    - Changing FFT size or analyser settings beyond simple display mapping
+    - New visualization modes (particles, circular, etc.)
+    - Server-side changes
+    - Saving palette preference to localStorage (optional, not required)
+    - Mobile-specific redesign
+
+spectrum_display:
+  strategy: "use only the lower portion of frequency bins"
+  recommendation:
+    - Use approximately the lower 70–80% of the available FFT bins for drawing
+    - Or map display to a fixed useful range (e.g. ignore the top 20–30% of bins)
+  notes: |
+    Do not change the underlying AnalyserNode FFT size unless necessary.
+    Only change how many bins are sampled/drawn so the visual fills the width.
+
+color_palettes:
+  count: 8
+  selection_ui: simple buttons or a compact select/segmented control
+  palettes:
+    - id: purple-pink
+      name: Purple Pink
+      description: Current default (purple → pink)
+    - id: cyan-blue
+      name: Cyan Blue
+      description: Cool cyan to blue
+    - id: orange-fire
+      name: Orange Fire
+      description: Warm orange to red/yellow
+    - id: green-matrix
+      name: Green Matrix
+      description: Matrix-style greens
+    - id: red-heat
+      name: Red Heat
+      description: Deep red to bright heat
+    - id: rainbow
+      name: Rainbow
+      description: Full spectrum hue shift
+    - id: mono
+      name: Mono
+      description: Grayscale / white
+    - id: neon
+      name: Neon
+      description: High-saturation neon colors
+
+  behavior:
+    - Default palette: purple-pink (keep current look)
+    - Switching palette updates the visualization immediately
+    - No page reload required
+
+implementation_notes:
+  file: public/visualizer.html
+  approach: |
+    - Add a small palette selector UI near the existing controls
+    - Store current palette in a simple JS variable
+    - When drawing bars, sample only the lower portion of the frequency data
+    - Map bar colors from the selected palette (gradient or per-bar hue)
+  keep:
+    - Existing p5.js + Web Audio flow
+    - Existing Load Song / play controls
+    - Existing Worker API usage
+
+verification:
+  required: true
+  method: deployed-static-check
+  steps:
+    - Push changes (no local build tools)
+    - Open the deployed visualizer.html
+    - Load a public Suno track
+    - Confirm the spectrum no longer has a large empty region on the right
+    - Switch through all 8 palettes and confirm colors change correctly
+  pass_criteria:
+    - Spectrum appears visually fuller (high end trimmed)
+    - All 8 palettes are selectable and visibly different
+    - Audio playback and basic visualization still work
+    - No new dependencies or build steps introduced
+
+success_criteria:
+  - High-frequency empty area is significantly reduced
+  - User can switch between ~8 color palettes
+  - Implementation stays pure static and simple
