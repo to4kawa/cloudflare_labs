@@ -1,0 +1,169 @@
+# design-suno-visualizer.yaml
+# AI-readable strict design document for Suno Visualizer on Cloudflare Workers
+# Version: 0.1.0
+# Status: Draft
+# Last Updated: 2026-08-01
+
+meta:
+  project: cloudflare_labs
+  feature: suno-visualizer
+  owner: to4kawa
+  goal: |
+    Allow users to paste a public Suno song URL and get a real-time client-side
+    music visualization. Worker only resolves metadata and media URLs.
+    Visualization is performed entirely in the browser.
+
+architecture:
+  style: "edge-resolve + client-render"
+  components:
+    - name: Worker
+      responsibility:
+        - Parse Suno URL
+        - Extract song ID
+        - Resolve audio_url and cover_url
+        - Return structured JSON metadata
+      technology: Cloudflare Workers (existing project)
+      runtime: V8 isolate
+
+    - name: Client
+      responsibility:
+        - Accept Suno URL from user
+        - Call Worker API
+        - Load audio and cover
+        - Perform real-time visualization using Web Audio API + p5.js
+      technology: Static HTML + vanilla JS + p5.js (CDN)
+
+data_flow:
+  - step: 1
+    actor: Client
+    action: User pastes Suno URL (e.g. https://suno.com/song/{uuid} or https://suno.com/s/{shortId})
+  - step: 2
+    actor: Client
+    action: GET /api/suno?url={encoded_suno_url}
+  - step: 3
+    actor: Worker
+    action: |
+      1. Validate and parse URL
+      2. Extract song ID (prefer full UUID)
+      3. Resolve media URLs (prefer direct CDN construction, fallback to page fetch if needed)
+      4. Optionally fetch title / duration / other metadata
+      5. Return JSON
+  - step: 4
+    actor: Client
+    action: Receive JSON → set <audio> src and cover image → start Web Audio analysis + p5.js draw loop
+
+api:
+  endpoint: /api/suno
+  method: GET
+  query_params:
+    - name: url
+      type: string
+      required: true
+      description: Full or short Suno song URL
+  response:
+    success:
+      status: 200
+      content_type: application/json
+      schema:
+        id: string                  # canonical UUID
+        title: string | null
+        audio_url: string           # direct playable MP3 URL
+        cover_url: string | null    # cover image URL
+        duration: number | null     # seconds
+        source_url: string          # original Suno URL
+        resolved_at: string         # ISO timestamp
+    error:
+      status: 400 | 404 | 502
+      schema:
+        error: string
+        message: string
+        code: string
+
+url_parsing_rules:
+  supported_patterns:
+    - "https://suno.com/song/{uuid}"
+    - "https://suno.com/s/{shortId}"
+    - "https://suno.com/song/{uuid}?..."
+    - bare "suno.com/song/..." and "suno.com/s/..."
+  extraction_priority:
+    - Prefer full UUID when available
+    - Short ID should be resolved to full UUID if possible
+  validation:
+    - Must contain suno.com domain
+    - Must match one of the supported path patterns
+    - Reject non-public or malformed URLs early
+
+media_resolution_strategy:
+  primary:
+    method: direct_cdn_construction
+    audio: "https://cdn1.suno.ai/{id}.mp3"
+    cover_candidates:
+      - "https://cdn2.suno.ai/image_{id}.jpeg"
+      - "https://cdn2.suno.ai/image_large_{id}.jpeg"
+      - "https://cdn1.suno.ai/image_{id}.png"
+  fallback:
+    method: page_fetch_or_external_resolver
+    notes: |
+      If direct CDN returns 403/404, attempt to fetch the Suno page
+      or call a trusted public resolver (e.g. OpenSuno-style endpoint).
+      Prefer not to depend on external services long-term.
+  constraints:
+    - Never store the audio file on Worker
+    - Never proxy the full audio stream by default (CORS + bandwidth)
+    - Only return URLs; client loads media directly
+
+client_requirements:
+  libraries:
+    - p5.js (CDN)
+    - Native Web Audio API
+  features_v1:
+    - URL input form
+    - Cover image preview
+    - Play / pause control
+    - Basic FFT-based visualizer (bars or particles)
+    - Responsive canvas
+  non_goals_v1:
+    - MP4 export / recording
+    - Custom visualizer selection
+    - Playlist support
+    - Authentication
+
+error_handling:
+  worker:
+    - Invalid URL → 400
+    - Song not found / private → 404
+    - Upstream failure → 502
+  client:
+    - Show clear error message
+    - Do not start visualizer if audio_url is missing
+
+security_and_limits:
+  - Rate limit the /api/suno endpoint (simple in-memory or Cloudflare rate limiting)
+  - Do not accept arbitrary external URLs (only suno.com)
+  - Do not download or cache audio on Worker
+  - Respect Suno ToS; this is for personal / experimental use of public tracks only
+
+implementation_plan:
+  phase_1:
+    - Add /api/suno Worker route
+    - Implement URL parser + direct CDN resolution
+    - Basic success / error JSON responses
+  phase_2:
+    - Minimal client UI + p5.js visualizer
+    - Wire Client → Worker → Visualizer
+  phase_3:
+    - Improve metadata extraction
+    - Better visualizer aesthetics
+    - Optional recording (MediaRecorder)
+
+out_of_scope:
+  - Server-side MP4 generation (FFmpeg / ffmpeg.wasm)
+  - Private / non-public Suno tracks
+  - High-volume production usage
+  - Official Suno API key integration
+
+success_criteria:
+  - Paste a public Suno URL → receive valid audio_url and cover_url within 2 seconds
+  - Client can play the track and show a working real-time visualizer
+  - No .git or unnecessary files in deployment
+  - Design remains simple enough for future AI agents to extend
