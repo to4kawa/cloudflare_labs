@@ -1,0 +1,81 @@
+# design-shareable-deeplink.yaml
+# AI-readable design document for shareable ?url= deep links
+# Version: 0.1.0
+# Status: Draft
+
+meta:
+  feature: Shareable Deep Links
+  parent_spec: docs/spec.yaml
+  description: |
+    Allow users to share a direct link to the visualizer with a pre-loaded Suno song.
+    Format: /visualizer?url=https://suno.com/song/{uuid}
+    On page load, auto-populate the input field and optionally auto-load the track.
+
+constraints:
+  inherited_from: docs/spec.yaml
+  reaffirm:
+    - NO package.json, NO npm, NO build tools
+    - Pure static client (no Worker changes needed)
+    - Keep dependencies to CDN scripts only
+  additional:
+    - Must work with browser back/forward navigation
+    - Must not break existing functionality (manual URL paste still works)
+
+scope:
+  in_scope:
+    - Read ?url= query parameter from window.location on page load
+    - Auto-populate the input field with the URL from query param
+    - Optional: auto-load the song if ?url= is present and ?autoplay=1
+    - Update browser URL (history.pushState) when user loads a song manually
+  out_of_scope:
+    - Server-side URL shortening
+    - Social media preview cards (would require Worker meta tag injection)
+    - Playlist or multi-track deep links
+    - Persistent user preferences/history storage
+
+implementation_notes:
+  approach: |
+    Client-side only implementation in public/visualizer.html:
+    
+    1. On DOMContentLoaded:
+       - Parse URLSearchParams from window.location.search
+       - If ?url= exists, populate the input field
+       - If ?autoplay=1 is also present, trigger loadSong() automatically
+    
+    2. When user clicks "Load Song":
+       - After successful load, update URL with history.pushState()
+       - Format: ?url={encodeURIComponent(sunoUrl)}
+       - Preserves back/forward navigation
+    
+    3. Share button (optional nice-to-have):
+       - Add a "Share" button that copies current URL to clipboard
+       - Only visible when a song is loaded
+  
+  code_changes:
+    - public/visualizer.html: Add URL param handling in existing <script> section
+    - No Worker changes (index.ts unchanged)
+    - No new files needed
+
+verification:
+  success_criteria:
+    - Direct link like /visualizer?url=https://suno.com/song/abc123 pre-fills input
+    - Manual song load updates browser URL bar with ?url= parameter
+    - Browser back button returns to previous song or empty state
+    - Sharing the URL with ?url= param works in new tab/incognito
+  
+  test_cases:
+    - Visit /visualizer?url=https://suno.com/song/{valid-uuid}
+    - Verify input field is pre-filled
+    - Load a different song manually, check URL updates
+    - Copy URL from address bar, open in new tab, verify it loads same song
+    - Test with ?url= + ?autoplay=1 (if implemented)
+  
+  non_regression:
+    - Visiting /visualizer without query params still works (empty input)
+    - Invalid ?url= param shows appropriate error, doesn't crash page
+
+out_of_scope:
+  - Server-side short URLs (e.g. /s/abc → redirects with ?url=)
+  - Open Graph meta tags for social previews
+  - Query param validation on Worker side
+  - URL signing or anti-abuse measures

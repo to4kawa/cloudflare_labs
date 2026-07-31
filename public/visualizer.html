@@ -485,6 +485,10 @@
         hideLoading();
         showPlayer();
 
+        // Update URL for sharing (use pushState to avoid page reload)
+        const newUrl = `${window.location.pathname}?url=${encodeURIComponent(url)}`;
+        window.history.pushState({ sunoUrl: url }, '', newUrl);
+
         // Initialize visualizer when audio starts playing
         audioPlayer.addEventListener('play', initVisualizer, { once: true });
 
@@ -614,6 +618,39 @@
     function hideVisualizer() {
       visualizerSection.classList.remove('show');
     }
+
+    // Deep link support: Check for ?url= parameter on page load
+    function handleDeepLink() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const deepLinkUrl = urlParams.get('url');
+      const autoplay = urlParams.get('autoplay');
+
+      if (deepLinkUrl) {
+        // Pre-fill the input field
+        urlInput.value = deepLinkUrl;
+        
+        // Auto-load if autoplay parameter is present
+        if (autoplay === '1') {
+          loadSong();
+        }
+      }
+    }
+
+    // Handle browser back/forward navigation
+    window.addEventListener('popstate', (event) => {
+      if (event.state && event.state.sunoUrl) {
+        urlInput.value = event.state.sunoUrl;
+      } else {
+        // Navigated back to empty state
+        urlInput.value = '';
+        hidePlayer();
+        hideVisualizer();
+        hideError();
+      }
+    });
+
+    // Initialize deep link on page load
+    document.addEventListener('DOMContentLoaded', handleDeepLink);
   </script>
 </body>
 </html>
