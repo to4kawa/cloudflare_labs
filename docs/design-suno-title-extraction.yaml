@@ -1,0 +1,93 @@
+# design-suno-title-extraction.yaml
+# AI-readable design document for adding title (and optional cover) extraction
+# Version: 0.1.0
+# Status: Draft
+# Last Updated: 2026-08-01
+# Parent: design-suno-visualizer.yaml
+
+meta:
+  project: cloudflare_labs
+  feature: suno-title-extraction
+  parent_design: docs/design-suno-visualizer.yaml
+  goal: |
+    When resolving a Suno song, always attempt to extract the title
+    (and improve cover_url if possible) by fetching the song page.
+    Keep the existing direct-CDN fast path for audio_url.
+    Do not introduce any local development environment or new dependencies.
+
+constraints:
+  - Follow all constraints from the parent design document
+  - NO package.json / npm / local Node development
+  - Single Worker file (index.ts) only
+  - No external resolver services as primary path
+  - Keep response schema compatible with existing client
+
+current_behavior:
+  - audio_url is constructed from CDN using the resolved UUID
+  - title is always null
+  - cover_url is attempted via CDN HEAD checks only
+  - page fetch (fetchMetadataFromPage) is used only when CDN audio HEAD fails
+
+target_behavior:
+  - Always resolve real UUID (already done for short URLs)
+  - Construct audio_url via CDN (keep fast path)
+  - Always attempt to fetch the song page to extract:
+      - title (from og:title or similar)
+      - better cover_url (from og:image if available)
+  - If page fetch fails, still return audio_url with title: null
+  - Do not block or fail the whole request just because title is missing
+
+implementation:
+  approach: "CDN for audio + light page fetch for metadata"
+  changes_to_index_ts:
+    - After realId is resolved, construct audio_url as before
+    - Always call a lightweight metadata enrichment step
+    - Prefer og:title and og:image from the song page
+    - Keep existing error handling: page fetch failure must not turn into 404/502 if audio_url is valid
+  fetch_strategy:
+    - Use the canonical song URL: https://suno.com/song/{realId}
+    - Follow redirects if needed
+    - Parse only meta tags (og:title, og:image). Avoid heavy HTML parsing.
+    - Timeout should be short (e.g. respect Worker limits)
+
+response_schema:
+  # unchanged from parent design
+  id: string
+  title: string | null          # now populated when possible
+  audio_url: string
+  cover_url: string | null      # improved when og:image is found
+  duration: number | null
+  source_url: string
+  resolved_at: string
+
+error_handling:
+  - Page fetch failure → still return success with title: null and existing audio_url
+  - Only return 404/502 when audio itself cannot be resolved
+  - Do not treat missing title as an error
+
+verification:
+  required: true
+  method: deployed-static-check
+  steps:
+    - Push the change (no local build tools)
+    - Call /api/suno with a known public full UUID URL
+    - Call /api/suno with a known public short URL
+    - Confirm title is no longer null for public songs
+    - Confirm visualizer.html still works and shows the title if the client supports it
+  pass_criteria:
+    - Public songs return a non-null title in most cases
+    - audio_url remains playable
+    - Short URLs continue to work
+    - No package.json or Node tooling introduced
+
+out_of_scope:
+  - Lyrics extraction
+  - Duration extraction (unless trivial)
+  - Official Suno API
+  - Caching layer
+  - Client-side title display changes (unless already supported)
+
+success_criteria:
+  - Public Suno tracks return title in the JSON response
+  - Existing audio playback and visualization continue to work
+  - Design remains simple and dependency-free
