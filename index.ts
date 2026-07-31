@@ -110,8 +110,8 @@ function parseSunoUrl(input: string): string | null {
 
 /**
  * Resolve song metadata and media URLs
- * Primary strategy: Direct CDN URL construction
- * Fallback: Fetch Suno page and extract metadata
+ * Primary strategy: Direct CDN URL construction for audio
+ * Always enriches with title/cover from page fetch
  */
 async function resolveSongMetadata(songId: string, sourceUrl: string): Promise<SongMetadata> {
   // Short URL (/s/...) redirects to full /song/{uuid}. Follow redirect to get real UUID.
@@ -157,15 +157,63 @@ async function resolveSongMetadata(songId: string, sourceUrl: string): Promise<S
     }
   }
 
+  // Always attempt to enrich metadata from page (title + better cover)
+  const enriched = await enrichMetadataFromPage(realId, realSourceUrl);
+
   return {
     id: realId,
-    title: null, // Title requires page fetch
+    title: enriched.title,
     audio_url: audioUrl,
-    cover_url: coverUrl,
+    cover_url: enriched.cover_url || coverUrl, // Prefer page og:image over CDN guess
     duration: null,
     source_url: realSourceUrl,
     resolved_at: new Date().toISOString(),
   };
+}
+
+/**
+ * Enrich metadata by fetching the song page (non-blocking)
+ * Extracts title and cover_url from og: meta tags
+ * Returns nulls on failure without throwing
+ */
+async function enrichMetadataFromPage(songId: string, sourceUrl: string): Promise<{ title: string | null; cover_url: string | null }> {
+  try {
+    const pageUrl = sourceUrl.includes('/song/') 
+      ? sourceUrl 
+      : `https://suno.com/song/${songId}`;
+
+    const response = await fetch(pageUrl, { 
+      redirect: 'follow',
+      // Use a short timeout to avoid blocking the response
+      signal: AbortSignal.timeout(5000),
+    });
+    
+    if (!response.ok) {
+      return { title: null, cover_url: null };
+    }
+
+    const html = await response.text();
+
+    // Extract og:title
+    let title: string | null = null;
+    const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/i);
+    if (titleMatch) {
+      title = titleMatch[1];
+    }
+
+    // Extract og:image
+    let coverUrl: string | null = null;
+    const imageMatch = html.match(/<meta property="og:image" content="([^"]+)"/i);
+    if (imageMatch) {
+      coverUrl = imageMatch[1];
+    }
+
+    return { title, cover_url: coverUrl };
+  } catch (e) {
+    // Page fetch failed — return nulls, don't block the request
+    console.warn('Failed to enrich metadata from page:', e);
+    return { title: null, cover_url: null };
+  }
 }
 
 /**
