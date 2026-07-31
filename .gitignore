@@ -1,0 +1,32 @@
+# Git
+.git/
+.git/**
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node / Wrangler
+node_modules/
+.wrangler/
+dist/
+.wrangler/**
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
