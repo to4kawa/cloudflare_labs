@@ -97,7 +97,7 @@ function parseSunoUrl(input: string): string | null {
     }
 
     // Extract ID from path
-    const pathMatch = url.pathname.match(/\/(song|s)\/([a-f0-9\-]+)/i);
+    const pathMatch = url.pathname.match(/\/(song|s)\/([^\/\?]+)/i);
     if (pathMatch) {
       return pathMatch[2]; // Return the ID (either UUID or short ID)
     }
