@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suno Visualizer - Cloudflare Labs</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 12px;
+    }
+
+    .subtitle {
+      color: #888;
+      font-size: 1.1rem;
+    }
+
+    .input-section {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 32px;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 14px 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      color: #e0e0e0;
+      font-size: 1rem;
+      transition: all 0.2s;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    input[type="text"]::placeholder {
+      color: #666;
+    }
+
+    button {
+      padding: 14px 32px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .example-urls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+    }
+
+    .example-urls span {
+      color: #888;
+    }
+
+    .example-urls a {
+      color: #667eea;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .example-urls a:hover {
+      text-decoration: underline;
+    }
+
+    .error-message {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      display: none;
+    }
+
+    .error-message.show {
+      display: block;
+    }
+
+    .player-section {
+      display: none;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 32px;
+    }
+
+    .player-section.show {
+      display: block;
+    }
+
+    .song-info {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .cover-image {
+      width: 120px;
+      height: 120px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .song-details h2 {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+    }
+
+    .song-details p {
+      color: #888;
+      font-size: 0.95rem;
+    }
+
+    .audio-controls {
+      margin-top: 24px;
+    }
+
+    audio {
+      width: 100%;
+      border-radius: 8px;
+    }
+
+    .visualizer-section {
+      display: none;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+    }
+
+    .visualizer-section.show {
+      display: block;
+    }
+
+    #visualizer-canvas {
+      width: 100%;
+      max-width: 100%;
+      border-radius: 8px;
+      background: #000;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #888;
+      display: none;
+    }
+
+    .loading.show {
+      display: block;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(102, 126, 234, 0.3);
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎵 Suno Visualizer</h1>
+      <p class="subtitle">Paste a Suno song URL and visualize it in real-time</p>
+    </header>
+
+    <div class="input-section">
+      <div class="input-group">
+        <input 
+          type="text" 
+          id="url-input" 
+          placeholder="https://suno.com/song/..." 
+          autocomplete="off"
+        />
+        <button id="load-btn">Load Song</button>
+      </div>
+      <div class="example-urls">
+        <span>Examples:</span>
+        <a id="example-1">suno.com/song/abc123...</a>
+        <a id="example-2">suno.com/s/xyz456...</a>
+      </div>
+    </div>
+
+    <div class="error-message" id="error-message"></div>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>Loading song metadata...</p>
+    </div>
+
+    <div class="player-section" id="player-section">
+      <div class="song-info">
+        <img id="cover-image" class="cover-image" alt="Album Cover">
+        <div class="song-details">
+          <h2 id="song-title">Loading...</h2>
+          <p id="song-id"></p>
+        </div>
+      </div>
+      <div class="audio-controls">
+        <audio id="audio-player" controls crossorigin="anonymous"></audio>
+      </div>
+    </div>
+
+    <div class="visualizer-section" id="visualizer-section">
+      <div id="p5-container"></div>
+    </div>
+  </div>
+
+  <!-- p5.js from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/addons/p5.sound.min.js"></script>
+
+  <script>
+    // State
+    let audioElement;
+    let audioContext;
+    let analyser;
+    let dataArray;
+    let bufferLength;
+    let p5Instance;
+
+    // DOM Elements
+    const urlInput = document.getElementById('url-input');
+    const loadBtn = document.getElementById('load-btn');
+    const errorMessage = document.getElementById('error-message');
+    const loading = document.getElementById('loading');
+    const playerSection = document.getElementById('player-section');
+    const visualizerSection = document.getElementById('visualizer-section');
+    const coverImage = document.getElementById('cover-image');
+    const songTitle = document.getElementById('song-title');
+    const songId = document.getElementById('song-id');
+    const audioPlayer = document.getElementById('audio-player');
+
+    // Event Listeners
+    loadBtn.addEventListener('click', loadSong);
+    urlInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') loadSong();
+    });
+
+    // Load song from Suno URL
+    async function loadSong() {
+      const url = urlInput.value.trim();
+      if (!url) {
+        showError('Please enter a Suno URL');
+        return;
+      }
+
+      hideError();
+      showLoading();
+      hidePlayer();
+      hideVisualizer();
+
+      try {
+        // Call Worker API
+        const apiUrl = `/api/suno?url=${encodeURIComponent(url)}`;
+        const response = await fetch(apiUrl);
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to load song');
+        }
+
+        const metadata = await response.json();
+        console.log('Metadata:', metadata);
+
+        // Update UI
+        songTitle.textContent = metadata.title || 'Unknown Title';
+        songId.textContent = `ID: ${metadata.id}`;
+        
+        if (metadata.cover_url) {
+          coverImage.src = metadata.cover_url;
+          coverImage.style.display = 'block';
+        } else {
+          coverImage.style.display = 'none';
+        }
+
+        // Load audio
+        audioPlayer.src = metadata.audio_url;
+        
+        hideLoading();
+        showPlayer();
+
+        // Initialize visualizer when audio starts playing
+        audioPlayer.addEventListener('play', initVisualizer, { once: true });
+
+      } catch (error) {
+        console.error('Error:', error);
+        showError(error.message);
+        hideLoading();
+      }
+    }
+
+    // Initialize Web Audio API and p5.js visualizer
+    function initVisualizer() {
+      if (audioContext) {
+        showVisualizer();
+        return;
+      }
+
+      // Create Web Audio API context
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaElementSource(audioPlayer);
+      
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      bufferLength = analyser.frequencyBinCount;
+      dataArray = new Uint8Array(bufferLength);
+
+      source.connect(analyser);
+      analyser.connect(audioContext.destination);
+
+      // Create p5.js sketch
+      const sketch = (p) => {
+        p.setup = function() {
+          const canvas = p.createCanvas(p.windowWidth * 0.9, 400);
+          canvas.parent('p5-container');
+          p.colorMode(p.HSB);
+        };
+
+        p.draw = function() {
+          p.background(0, 0, 10);
+
+          if (audioPlayer.paused) {
+            // Show static state
+            p.textAlign(p.CENTER, p.CENTER);
+            p.fill(255, 100);
+            p.textSize(24);
+            p.text('▶ Press play to start visualization', p.width / 2, p.height / 2);
+            return;
+          }
+
+          // Get frequency data
+          analyser.getByteFrequencyData(dataArray);
+
+          // Draw frequency bars
+          const barWidth = p.width / bufferLength;
+          let x = 0;
+
+          for (let i = 0; i < bufferLength; i++) {
+            const barHeight = (dataArray[i] / 255) * p.height * 0.8;
+            const hue = p.map(i, 0, bufferLength, 200, 300);
+            const brightness = p.map(dataArray[i], 0, 255, 30, 100);
+
+            p.fill(hue, 80, brightness);
+            p.noStroke();
+            p.rect(x, p.height - barHeight, barWidth, barHeight);
+
+            x += barWidth;
+          }
+
+          // Draw waveform overlay
+          p.stroke(280, 80, 90, 0.5);
+          p.strokeWeight(2);
+          p.noFill();
+          p.beginShape();
+          for (let i = 0; i < bufferLength; i++) {
+            const x = p.map(i, 0, bufferLength, 0, p.width);
+            const y = p.map(dataArray[i], 0, 255, p.height, p.height * 0.2);
+            p.vertex(x, y);
+          }
+          p.endShape();
+        };
+
+        p.windowResized = function() {
+          p.resizeCanvas(p.windowWidth * 0.9, 400);
+        };
+      };
+
+      p5Instance = new p5(sketch);
+      showVisualizer();
+    }
+
+    // UI Helper Functions
+    function showError(message) {
+      errorMessage.textContent = message;
+      errorMessage.classList.add('show');
+    }
+
+    function hideError() {
+      errorMessage.classList.remove('show');
+    }
+
+    function showLoading() {
+      loading.classList.add('show');
+    }
+
+    function hideLoading() {
+      loading.classList.remove('show');
+    }
+
+    function showPlayer() {
+      playerSection.classList.add('show');
+    }
+
+    function hidePlayer() {
+      playerSection.classList.remove('show');
+    }
+
+    function showVisualizer() {
+      visualizerSection.classList.add('show');
+    }
+
+    function hideVisualizer() {
+      visualizerSection.classList.remove('show');
+    }
+  </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # design-suno-visualizer.yaml
 # AI-readable strict design document for Suno Visualizer on Cloudflare Workers
-# Version: 0.1.0
+# Version: 0.2.0
 # Status: Draft
 # Last Updated: 2026-08-01
 
@@ -13,6 +13,16 @@ meta:
     music visualization. Worker only resolves metadata and media URLs.
     Visualization is performed entirely in the browser.
 
+constraints:
+  - NO local Node.js development environment
+  - NO package.json
+  - NO npm install / npm run dev
+  - NO wrangler as a project dependency
+  - Worker source is a single index.ts (or index.js) at repository root
+  - Client is pure static files under public/
+  - Deployment is Git push → Cloudflare automatic deploy only
+  - Do not introduce build tools, bundlers, or framework scaffolding
+
 architecture:
   style: "edge-resolve + client-render"
   components:
@@ -22,7 +32,8 @@ architecture:
         - Extract song ID
         - Resolve audio_url and cover_url
         - Return structured JSON metadata
-      technology: Cloudflare Workers (existing project)
+      technology: Cloudflare Workers
+      entry: index.ts (repository root)
       runtime: V8 isolate
 
     - name: Client
@@ -32,6 +43,7 @@ architecture:
         - Load audio and cover
         - Perform real-time visualization using Web Audio API + p5.js
       technology: Static HTML + vanilla JS + p5.js (CDN)
+      location: public/visualizer.html
 
 data_flow:
   - step: 1
@@ -65,13 +77,13 @@ api:
       status: 200
       content_type: application/json
       schema:
-        id: string                  # canonical UUID
+        id: string
         title: string | null
-        audio_url: string           # direct playable MP3 URL
-        cover_url: string | null    # cover image URL
-        duration: number | null     # seconds
-        source_url: string          # original Suno URL
-        resolved_at: string         # ISO timestamp
+        audio_url: string
+        cover_url: string | null
+        duration: number | null
+        source_url: string
+        resolved_at: string
     error:
       status: 400 | 404 | 502
       schema:
@@ -105,16 +117,16 @@ media_resolution_strategy:
     method: page_fetch_or_external_resolver
     notes: |
       If direct CDN returns 403/404, attempt to fetch the Suno page
-      or call a trusted public resolver (e.g. OpenSuno-style endpoint).
+      or call a trusted public resolver.
       Prefer not to depend on external services long-term.
   constraints:
     - Never store the audio file on Worker
-    - Never proxy the full audio stream by default (CORS + bandwidth)
+    - Never proxy the full audio stream by default
     - Only return URLs; client loads media directly
 
 client_requirements:
   libraries:
-    - p5.js (CDN)
+    - p5.js (CDN only)
     - Native Web Audio API
   features_v1:
     - URL input form
@@ -127,6 +139,7 @@ client_requirements:
     - Custom visualizer selection
     - Playlist support
     - Authentication
+    - Any build step or bundler
 
 error_handling:
   worker:
@@ -138,32 +151,54 @@ error_handling:
     - Do not start visualizer if audio_url is missing
 
 security_and_limits:
-  - Rate limit the /api/suno endpoint (simple in-memory or Cloudflare rate limiting)
+  - Rate limit the /api/suno endpoint if possible via Cloudflare
   - Do not accept arbitrary external URLs (only suno.com)
   - Do not download or cache audio on Worker
-  - Respect Suno ToS; this is for personal / experimental use of public tracks only
+  - Respect Suno ToS; experimental use of public tracks only
 
 implementation_plan:
   phase_1:
-    - Add /api/suno Worker route
-    - Implement URL parser + direct CDN resolution
+    - Implement /api/suno in index.ts
+    - URL parser + direct CDN resolution
     - Basic success / error JSON responses
   phase_2:
-    - Minimal client UI + p5.js visualizer
+    - public/visualizer.html with p5.js visualizer
     - Wire Client → Worker → Visualizer
   phase_3:
     - Improve metadata extraction
     - Better visualizer aesthetics
     - Optional recording (MediaRecorder)
 
+verification:
+  required: true
+  method: deployed-static-check
+  policy: |
+    Code existence is not completion.
+    Completion requires successful static confirmation on the deployed Cloudflare URL.
+    Local Node / wrangler dev is forbidden and must not be introduced.
+  steps:
+    - Commit and push only the necessary files (index.ts, public/*, docs/*, wrangler.jsonc, .gitignore)
+    - Let Cloudflare auto-deploy from GitHub
+    - Call the deployed endpoint:
+        GET https://{worker}.workers.dev/api/suno?url={public_suno_song_url}
+    - Confirm HTTP 200 and valid JSON containing audio_url (and ideally cover_url)
+    - Open https://{worker}.workers.dev/visualizer.html
+    - Paste the same Suno URL and confirm the visualizer starts and reacts to the audio
+  pass_criteria:
+    - /api/suno returns the defined success schema
+    - audio_url is directly playable
+    - visualizer.html renders real-time visualization driven by the audio
+    - No package.json, node_modules, or local build tooling exists in the repository
+
 out_of_scope:
   - Server-side MP4 generation (FFmpeg / ffmpeg.wasm)
   - Private / non-public Suno tracks
   - High-volume production usage
   - Official Suno API key integration
+  - Local development server / npm-based workflow
 
 success_criteria:
-  - Paste a public Suno URL → receive valid audio_url and cover_url within 2 seconds
-  - Client can play the track and show a working real-time visualizer
-  - No .git or unnecessary files in deployment
-  - Design remains simple enough for future AI agents to extend
+  - Paste a public Suno URL → receive valid audio_url and cover_url from the deployed Worker
+  - Client can play the track and show a working real-time visualizer on the deployed URL
+  - Repository remains free of Node project scaffolding
+  - Design remains simple enough for future AI agents to extend without adding build tools
