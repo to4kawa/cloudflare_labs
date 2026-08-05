@@ -328,6 +328,13 @@
 
     <div class="visualizer-section" id="visualizer-section">
       <div class="palette-selector">
+        <label>Visualization Style</label>
+        <div class="palette-buttons">
+          <button class="palette-btn active" data-style="bars">Bars</button>
+          <button class="palette-btn" data-style="circular">Circular</button>
+        </div>
+      </div>
+      <div class="palette-selector">
         <label>Color Palette</label>
         <div class="palette-buttons">
           <button class="palette-btn active" data-palette="purple-pink">Purple Pink</button>
@@ -357,6 +364,7 @@
     let bufferLength;
     let p5Instance;
     let currentPalette = 'purple-pink';
+    let currentStyle = 'bars';
 
     // Color Palettes
     const palettes = {
@@ -428,18 +436,16 @@
       if (e.key === 'Enter') loadSong();
     });
 
-    // Palette selector
+    // Palette / style selectors (each button toggles active within its own group)
     document.addEventListener('click', (e) => {
-      if (e.target.classList.contains('palette-btn')) {
-        // Remove active class from all buttons
-        document.querySelectorAll('.palette-btn').forEach(btn => {
-          btn.classList.remove('active');
-        });
-        // Add active class to clicked button
-        e.target.classList.add('active');
-        // Update current palette
-        currentPalette = e.target.dataset.palette;
-      }
+      if (!e.target.classList.contains('palette-btn')) return;
+
+      const group = e.target.closest('.palette-buttons');
+      group.querySelectorAll('.palette-btn').forEach(btn => btn.classList.remove('active'));
+      e.target.classList.add('active');
+
+      if (e.target.dataset.palette) currentPalette = e.target.dataset.palette;
+      if (e.target.dataset.style) currentStyle = e.target.dataset.style;
     });
 
     // Load song from Suno URL
@@ -543,13 +549,19 @@
 
           // Use only lower 75% of frequency bins to avoid empty high-end
           const usefulBins = Math.floor(bufferLength * 0.75);
+          const palette = palettes[currentPalette];
+
+          if (currentStyle === 'circular') {
+            drawCircular(p, usefulBins, palette);
+          } else {
+            drawBars(p, usefulBins, palette);
+          }
+        };
+
+        function drawBars(p, usefulBins, palette) {
           const barWidth = p.width / usefulBins;
           let x = 0;
 
-          // Get current palette settings
-          const palette = palettes[currentPalette];
-
-          // Draw frequency bars
           for (let i = 0; i < usefulBins; i++) {
             const barHeight = (dataArray[i] / 255) * p.height * 0.8;
             const hue = p.map(i, 0, usefulBins, palette.hueStart, palette.hueEnd);
@@ -562,7 +574,7 @@
             x += barWidth;
           }
 
-          // Draw waveform overlay with palette-aware color
+          // Waveform overlay with palette-aware color
           const overlayHue = (palette.hueStart + palette.hueEnd) / 2;
           p.stroke(overlayHue, palette.saturation, 90, 0.5);
           p.strokeWeight(2);
@@ -574,7 +586,33 @@
             p.vertex(x, y);
           }
           p.endShape();
-        };
+        }
+
+        function drawCircular(p, usefulBins, palette) {
+          const cx = p.width / 2;
+          const cy = p.height / 2;
+          const baseRadius = Math.min(p.width, p.height) * 0.15;
+          const maxExtra = Math.min(p.width, p.height) * 0.35;
+
+          p.push();
+          p.translate(cx, cy);
+          p.noFill();
+          p.beginShape();
+          for (let i = 0; i <= usefulBins; i++) {
+            const idx = i % usefulBins;
+            const angle = p.map(i, 0, usefulBins, 0, p.TWO_PI);
+            const amp = dataArray[idx] / 255;
+            const r = baseRadius + amp * maxExtra;
+            const hue = p.map(idx, 0, usefulBins, palette.hueStart, palette.hueEnd);
+            const brightness = p.map(dataArray[idx], 0, 255, 30, 100);
+
+            p.stroke(hue, palette.saturation, brightness);
+            p.strokeWeight(3);
+            p.point(r * p.cos(angle), r * p.sin(angle));
+          }
+          p.endShape(p.CLOSE);
+          p.pop();
+        }
 
         p.windowResized = function() {
           p.resizeCanvas(p.windowWidth * 0.9, 400);
